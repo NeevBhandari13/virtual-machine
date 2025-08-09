@@ -13,7 +13,9 @@ struct VM {
 };
 
 uint8_t getOpcode(uint32_t instruction) {
-    uint32_t bitMask = 00000000000000000000000000111111;
-    uint8_t opcode = instruction & bitMask;
+    uint32_t bitMask = 0b00111111;
+    uint8_t opcode = (instruction >> 26) & bitMask;
     return opcode;
 }
+
+

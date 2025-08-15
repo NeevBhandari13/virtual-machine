@@ -32,7 +32,7 @@ Memory operations
 | **Language** | **Format**                                                      |
 | ------------ | --------------------------------------------------------------- |
 | Assembly     | (instruction) (Destination register) (Source Register) (Offset) |
-| Bytecode     | Opcode(6) RD(4) RS(4) OFFSET(18)                                |
+| Bytecode     | Opcode(6) RD(4) RS(4) OFFSET(16) UNUSED(2)                      |
 |              |                                                                 |
 ### B Type
 Branching logic
@@ -40,7 +40,7 @@ Branching logic
 | **Language** | **Format**                                                     |
 | ------------ | -------------------------------------------------------------- |
 | Assembly     | (instruction) (source register 1) (source register 2) (Offset) |
-| Bytecode     | Opcode(6) RS1(4) RS2(4) OFFSET(18)                             |
+| Bytecode     | Opcode(6) RS1(4) RS2(4) OFFSET(16) UNUSED(2)                   |
 
 
 ## Instructions
@@ -73,8 +73,8 @@ Branching logic
 ### Memory Operations
 |Mnemonic|Opcode (bin)|Opcode (hex)|Format|Operands|Description|
 |---|---|---|---|---|---|
-|`LD`|`001111`|`0x0F`|M|`rd, [rs + offset]`|`rd ← MEM[rs + offset]`|
-|`ST`|`010000`|`0x10`|M|`[rs + offset], rt`|`MEM[rs + offset] ← rt`|
+|`LD (load)`|`001111`|`0x0F`|M|`rd, [rs + offset]`|`rd ← MEM[rs + offset]`| 
+|`ST (store)`|`010000`|`0x10`|M|`[rs + offset], rt`|`MEM[rs + offset] ← rt`|
 ### Control Flow
 | Mnemonic | Opcode (bin) | Opcode (hex) | Format | Operands         | Description                     |
 | -------- | ------------ | ------------ | ------ | ---------------- | ------------------------------- |

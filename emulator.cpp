@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <stdio.h>
+#include <fstream>
 
 
 
@@ -88,25 +90,36 @@ class VM {
     // 64 KiB of memory
     std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
 
-    // words are in little endian form, this means 4 bytes is split across 4 memory addresses
-    // with the first byte in the highest memory address
-    uint32_t loadWord(uint32_t addr) const {
-    if (addr + 3 >= memory.size()) throw std::out_of_range("Read OOB");
-    return memory[addr] 
-        | (memory[addr+1] << 8)
-        | (memory[addr+2] << 16)
-        | (memory[addr+3] << 24);
-}
+    // vm function to load program into memory
+    bool loadProgram(std::string& filename) {
+        // Reset the VM state
+        std::fill(std::begin(registers), std::end(registers), 0);
+        pc = 0;
+        sp: 0xFFFC;
 
-    uint32_t fetchInstruction() {
-        uint32_t word = loadWord(pc);
-        pc += 4;
-        return word;
+        // clear ram
+        std::fill(memory.begin(), memory.end(), 0);
+        
+        // read in the file
+        // opens program file, reads in binary format
+        std::ifstream programFile(filename, std::ios::binary);
+
+        if (!programFile) {
+            throw std::runtime_error("Failed to open program file");
+        }
+
+        
+
+
     }
-    
+
+    // vm function to process instruction
+    void processInstruction(uint32_t instruction) {
+
+    }
 };
 
-uint8_t getOpcode(uint32_t instructionCode) {
+uint32_t getOpcode(uint32_t instructionCode) {
     uint32_t bitMask = 0b00111111;
     uint8_t opcode = (instructionCode >> 26) & bitMask;
     return opcode;

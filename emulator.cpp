@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <stdio.h>
+#include <fstream>
 
 class Instruction {
     public:
@@ -52,16 +54,39 @@ struct VM {
     // 64 KiB of memory
     std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
 
+    // vm function to load program into memory
+    bool loadProgram(std::string& filename) {
+        // Reset the VM state
+        std::fill(std::begin(registers), std::end(registers), 0);
+        pc = 0;
+        sp: 0xFFFC;
+
+        // clear ram
+        std::fill(memory.begin(), memory.end(), 0);
+        
+        // read in the file
+        // opens program file, reads in binary format
+        std::ifstream programFile(filename, std::ios::binary);
+
+        if (!programFile) {
+            throw std::runtime_error("Failed to open program file");
+        }
+
+        
+
+
+    }
+
     // vm function to process instruction
-    void processInstruction(uint32_t instruction) {}
+    void processInstruction(uint32_t instruction) {
+
+    }
 };
 
-Instruction getOpcode(uint32_t instructionCode) {
+uint32_t getOpcode(uint32_t instructionCode) {
     uint32_t bitMask = 0b00111111;
     uint8_t opcode = (instructionCode >> 26) & bitMask;
-    Instruction instruction;
-    instruction.opcode = opcode;
-    return instruction;
+    return opcode;
 }
 
 RTypeInstruction decodeRTypeInstruction(uint32_t instructionCode) {

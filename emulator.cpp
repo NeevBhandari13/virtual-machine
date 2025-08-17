@@ -1,10 +1,46 @@
 #include <iostream>
 #include <vector>
 
+
+
+enum Opcode : uint8_t {
+    // Arithmetic (R-type: opcode, rd, rs1, rs2)
+    OP_ADD  = 0x00, // R-type
+    OP_SUB  = 0x01, // R-type
+    OP_MUL  = 0x02, // R-type
+    OP_DIV  = 0x03, // R-type
+    OP_MOD  = 0x04, // R-type
+
+    // Binary Logic (R-type)
+    OP_AND  = 0x05, // R-type
+    OP_OR   = 0x06, // R-type
+    OP_XOR  = 0x07, // R-type
+    OP_SHL  = 0x08, // R-type
+    OP_SHR  = 0x09, // R-type
+
+    // Immediate Arithmetic (I-type: opcode, rd, rs1, imm)
+    OP_ADDI = 0x0A, // I-type
+    OP_SUBI = 0x0B, // I-type
+    OP_MULI = 0x0C, // I-type
+    OP_ANDI = 0x0D, // I-type
+    OP_ORI  = 0x0E, // I-type
+
+    // Memory Operations (M-type: opcode, rd/rs, address)
+    OP_LD   = 0x0F, // M-type
+    OP_ST   = 0x10, // M-type
+
+    // Control Flow
+    OP_JMP  = 0x11, // J-type: opcode, address
+    OP_BEQ  = 0x12, // B-type: opcode, rs1, rs2, offset
+    OP_BNE  = 0x13, // B-type: opcode, rs1, rs2, offset
+    OP_CALL = 0x14, // J-type: opcode, address
+    OP_RET  = 0x15, // R-type (no operands, uses stack/PC)
+    OP_HLT  = 0x16  // R-type (no operands)
+};
+
 class Instruction {
     public:
         uint8_t opcode;
-
 };
 
 class RTypeInstruction: public Instruction {
@@ -42,7 +78,7 @@ class BTypeInstruction: public Instruction {
     uint16_t offset;
 };
 
-struct VM {
+class VM {
     uint32_t registers[8]; // registers
     uint32_t pc = 0; // program counter
     // stack pointer, starts at 0xFFFC 
@@ -52,16 +88,28 @@ struct VM {
     // 64 KiB of memory
     std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
 
-    // vm function to process instruction
-    void processInstruction(uint32_t instruction) {}
+    // words are in little endian form, this means 4 bytes is split across 4 memory addresses
+    // with the first byte in the highest memory address
+    uint32_t loadWord(uint32_t addr) const {
+    if (addr + 3 >= memory.size()) throw std::out_of_range("Read OOB");
+    return memory[addr] 
+        | (memory[addr+1] << 8)
+        | (memory[addr+2] << 16)
+        | (memory[addr+3] << 24);
+}
+
+    uint32_t fetchInstruction() {
+        uint32_t word = loadWord(pc);
+        pc += 4;
+        return word;
+    }
+    
 };
 
-Instruction getOpcode(uint32_t instructionCode) {
+uint8_t getOpcode(uint32_t instructionCode) {
     uint32_t bitMask = 0b00111111;
     uint8_t opcode = (instructionCode >> 26) & bitMask;
-    Instruction instruction;
-    instruction.opcode = opcode;
-    return instruction;
+    return opcode;
 }
 
 RTypeInstruction decodeRTypeInstruction(uint32_t instructionCode) {
@@ -106,11 +154,3 @@ MTypeInstruction decodeMTypeInstruction(uint32_t instructionCode) {
 
     return instruction;
 }
-
-
-
-
-
-
-
-

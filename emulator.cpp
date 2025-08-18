@@ -94,8 +94,10 @@ class Instruction {
 
 
 uint32_t getOpcode(uint32_t instructionCode) {
+    std::cout << instructionCode << std::endl;
     uint32_t bitMask = 0b00111111;
     uint8_t opcode = (instructionCode >> 26) & bitMask;
+    std::cout << opcode;
     return opcode;
 }
 
@@ -183,8 +185,6 @@ class VM {
             if (buffer.size() > memory.size()) {
                 throw std::runtime_error("Program is too large to fit in VM memory");
             }
-            
-            std::cout << "ff";
 
             // copy from char buffer to memory
             // copy reinterprets each byte from char to uint_8 since both are 1-byte
@@ -196,12 +196,19 @@ class VM {
             if (addr + 3 >= memory.size()) {
                 throw std::out_of_range("Memory read out of bounds");
             }
+            std::cout 
+                << int(memory[addr+3]) << " "
+                << int(memory[addr+2]) << " "
+                << int(memory[addr+1]) << " "
+                << int(memory[addr]) << std::endl;
 
             // Little-endian load: lowest byte first
-            return  (uint32_t(memory[addr+3]) << 24) |
+            uint32_t word = (uint32_t(memory[addr+3]) << 24) |
             (uint32_t(memory[addr+2]) << 16) |
             (uint32_t(memory[addr+1]) << 8)  |
             uint32_t(memory[addr]);
+            
+            return word;
         }
 
         void writeMemory(uint32_t addr, uint32_t value) {
@@ -217,23 +224,23 @@ class VM {
         }
 
         void pushStack(uint32_t value) {
-        // stack goes from high addresses to low
-        if (sp < 4) {
-            throw std::overflow_error("Stack overflow");
-        }
+            // stack goes from high addresses to low
+            if (sp < 4) {
+                throw std::overflow_error("Stack overflow");
+            }
 
-        sp -= 4;  // move stack pointer down
-        writeMemory(sp, value);
+            sp -= 4;  // move stack pointer down
+            writeMemory(sp, value);
         }   
 
         uint32_t popStack() {
-        if (sp + 4 > memory.size()) {
-            throw std::underflow_error("Stack underflow");
-        }
+            if (sp + 4 > memory.size()) {
+                throw std::underflow_error("Stack underflow");
+            }
 
-        uint32_t value = readMemory(sp);
-        sp += 4;  // move stack pointer up
-        return value;
+            uint32_t value = readMemory(sp);
+            sp += 4;  // move stack pointer up
+            return value;
         }
 
         uint32_t fetchInstruction() {
@@ -334,12 +341,14 @@ class VM {
 
     void run(std::string& fileName) {
         loadProgram(fileName);
-        while (!halted) {
+        std::cout << "test1" << std::endl;
+        while (!halted && pc < 32) {
             uint32_t instCode = fetchInstruction();
             pc += 4; // increment program counter
             Instruction inst = decodeInstruction(instCode);
             executeInstruction(inst);
         }
+        std::cout << "test2" << std::endl;
     }
 
 

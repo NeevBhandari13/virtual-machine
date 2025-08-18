@@ -92,40 +92,55 @@ class Instruction {
         uint16_t imm, addr, offset;
 };
 
-// class RTypeInstruction: public Instruction {
-//     // Opcode(6) RD(4) RS1(4) RS2(4) Unused(14) 
-//     public:
-//         uint8_t rd, rs1, rs2;
-// };
 
-// class ITypeInstruction: public Instruction {
-//     // Opcode(6) RD(4) RS(4) IMM(16) Unused(2)
-//     public:
-//     uint8_t rd, rs;
-//     uint16_t imm;
-// };
+uint32_t getOpcode(uint32_t instructionCode) {
+    uint32_t bitMask = 0b00111111;
+    uint8_t opcode = (instructionCode >> 26) & bitMask;
+    return opcode;
+}
 
-// class JTypeInstruction: public Instruction {
-//     // Opcode(6) Address(16) Unused(10)
-//     public:
-//     uint16_t adr;
+Instruction decodeRTypeInstruction(uint32_t instructionCode) {
+    // R type instruction: Opcode(6) RD(4) RS1(4) RS2(4) Unused(14)
+    uint32_t opcodeBitmask = 0x3F; // 0b00111111
+    uint32_t bitmask = 0x0F; // 0b00001111
+    Instruction instruction;
+    instruction.opcode = (instructionCode >> 26) & opcodeBitmask;
+    instruction.rd = (instructionCode >> 22) & bitmask;
+    instruction.rs1 = (instructionCode >> 18) & bitmask;
+    instruction.rs2 = (instructionCode >> 14) & bitmask;
+    return instruction;
+}
 
-// };
+Instruction decodeITypeInstruction(uint32_t instructionCode) {
+    // Opcode(6) RD(4) RS(4) IMM(16) Unused(2)
+    Instruction instruction;
+    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
+    instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
+    instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
+    instruction.imm = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
 
-// class MTypeInstruction: public Instruction {
-//     // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
-//     public:
-//     uint8_t rd, rs;
-//     uint16_t offset;
+    return instruction;
+}
 
-// };
+Instruction decodeJTypeInstruction(uint32_t instructionCode) {
+    // Opcode(6) Address(16) Unused(10)
+    Instruction instruction;
+    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
+    instruction.addr = (instructionCode >> 10) & 0xFFFF; // 0b1111111111111111
 
-// class BTypeInstruction: public Instruction {
-//     // Opcode(6) RS1(4) RS2(4) OFFSET(16) UNUSED(2)
-//     public:
-//     uint8_t rs1, rs2;
-//     uint16_t offset;
-// };
+    return instruction;
+}
+
+Instruction decodeMTypeInstruction(uint32_t instructionCode) {
+    // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
+    Instruction instruction;
+    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
+    instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
+    instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
+    instruction.offset = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
+
+    return instruction;
+}
 
 class VM {
     uint32_t registers[8]; // registers
@@ -140,7 +155,7 @@ class VM {
         std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
 
         // vm function to load program into memory
-        bool loadProgram(std::string& filename) {
+        void loadProgram(std::string& filename) {
             // Reset the VM state
             std::fill(std::begin(registers), std::end(registers), 0);
             pc = 0;
@@ -169,6 +184,8 @@ class VM {
                 throw std::runtime_error("Program is too large to fit in VM memory");
             }
             
+            std::cout << "ff";
+
             // copy from char buffer to memory
             // copy reinterprets each byte from char to uint_8 since both are 1-byte
             std::copy(buffer.begin(), buffer.end(), memory.begin());
@@ -329,51 +346,21 @@ class VM {
 
 };
 
-uint32_t getOpcode(uint32_t instructionCode) {
-    uint32_t bitMask = 0b00111111;
-    uint8_t opcode = (instructionCode >> 26) & bitMask;
-    return opcode;
-}
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: emulator <program.bin>\n";
+        return 1;
+    }
 
-Instruction decodeRTypeInstruction(uint32_t instructionCode) {
-    // R type instruction: Opcode(6) RD(4) RS1(4) RS2(4) Unused(14)
-    uint32_t opcodeBitmask = 0x3F; // 0b00111111
-    uint32_t bitmask = 0x0F; // 0b00001111
-    Instruction instruction;
-    instruction.opcode = (instructionCode >> 26) & opcodeBitmask;
-    instruction.rd = (instructionCode >> 22) & bitmask;
-    instruction.rs1 = (instructionCode >> 18) & bitmask;
-    instruction.rs2 = (instructionCode >> 14) & bitmask;
-    return instruction;
-}
+    std::string fileName = argv[1];
 
-Instruction decodeITypeInstruction(uint32_t instructionCode) {
-    // Opcode(6) RD(4) RS(4) IMM(16) Unused(2)
-    Instruction instruction;
-    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
-    instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
-    instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
-    instruction.imm = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
+    try {
+        VM vm;
+        vm.run(fileName);
+    } catch (std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 1;
+    }
 
-    return instruction;
-}
-
-Instruction decodeJTypeInstruction(uint32_t instructionCode) {
-    // Opcode(6) Address(16) Unused(10)
-    Instruction instruction;
-    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
-    instruction.addr = (instructionCode >> 10) & 0xFFFF; // 0b1111111111111111
-
-    return instruction;
-}
-
-Instruction decodeMTypeInstruction(uint32_t instructionCode) {
-    // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
-    Instruction instruction;
-    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
-    instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
-    instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
-    instruction.offset = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
-
-    return instruction;
+    return 0;
 }

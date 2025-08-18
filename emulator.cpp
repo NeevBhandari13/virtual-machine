@@ -101,22 +101,31 @@ class VM {
         std::fill(memory.begin(), memory.end(), 0);
         
         // read in the file
-        // opens program file, reads in binary format
+        // opens program file, reads in binary format to prevent any changes to file
         std::ifstream programFile(filename, std::ios::binary);
 
         if (!programFile) {
             throw std::runtime_error("Failed to open program file");
         }
-
         
+        // range constructor to create buffer, takes in iterators first and last and creates a vector from [first, last)
+        // std::istreambuf_iterator<char>(programFile) is an iterator pointing to the start of the programFile
+        // std::istreambuf_iterator<char>() is the default-constructed iterator, which represents the end-of-stream marker
+        std::vector<char> buffer(
+            (std::istreambuf_iterator<char>(programFile)),
+            std::istreambuf_iterator<char>()
+        );
 
+        if (buffer.size() > memory.size()) {
+            throw std::runtime_error("Program is too large to fit in VM memory");
+        }
+        
+        // copy from char buffer to memory
+        // copy reinterprets each byte from char to uint_8 since both are 1-byte
+        std::copy(buffer.begin(), buffer.end(), memory.begin());
 
     }
 
-    // vm function to process instruction
-    void processInstruction(uint32_t instruction) {
-
-    }
 };
 
 uint32_t getOpcode(uint32_t instructionCode) {

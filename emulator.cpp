@@ -74,45 +74,47 @@ std::unordered_map<uint8_t, InstructionType> opcodeType = {
     {0x33, InstructionType::J}, // HALT
 };
 
+// single instruction class with all fields
 class Instruction {
     public:
-        uint8_t opcode;
+        uint8_t opcode, rd, rs1, rs2;
+        uint16_t imm, addr, offset;
 };
 
-class RTypeInstruction: public Instruction {
-    // Opcode(6) RD(4) RS1(4) RS2(4) Unused(14) 
-    public:
-        uint8_t rd, rs1, rs2;
-};
+// class RTypeInstruction: public Instruction {
+//     // Opcode(6) RD(4) RS1(4) RS2(4) Unused(14) 
+//     public:
+//         uint8_t rd, rs1, rs2;
+// };
 
-class ITypeInstruction: public Instruction {
-    // Opcode(6) RD(4) RS(4) IMM(16) Unused(2)
-    public:
-    uint8_t rd, rs;
-    uint16_t imm;
-};
+// class ITypeInstruction: public Instruction {
+//     // Opcode(6) RD(4) RS(4) IMM(16) Unused(2)
+//     public:
+//     uint8_t rd, rs;
+//     uint16_t imm;
+// };
 
-class JTypeInstruction: public Instruction {
-    // Opcode(6) Address(16) Unused(10)
-    public:
-    uint16_t adr;
+// class JTypeInstruction: public Instruction {
+//     // Opcode(6) Address(16) Unused(10)
+//     public:
+//     uint16_t adr;
 
-};
+// };
 
-class MTypeInstruction: public Instruction {
-    // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
-    public:
-    uint8_t rd, rs;
-    uint16_t offset;
+// class MTypeInstruction: public Instruction {
+//     // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
+//     public:
+//     uint8_t rd, rs;
+//     uint16_t offset;
 
-};
+// };
 
-class BTypeInstruction: public Instruction {
-    // Opcode(6) RS1(4) RS2(4) OFFSET(16) UNUSED(2)
-    public:
-    uint8_t rs1, rs2;
-    uint16_t offset;
-};
+// class BTypeInstruction: public Instruction {
+//     // Opcode(6) RS1(4) RS2(4) OFFSET(16) UNUSED(2)
+//     public:
+//     uint8_t rs1, rs2;
+//     uint16_t offset;
+// };
 
 class VM {
     uint32_t registers[8]; // registers
@@ -187,12 +189,78 @@ class VM {
         throw std::runtime_error("Unknown instruction type");
     }
 
-    void executeInstruction(Instruction inst) {
-        switch (inst.opcode) {
-            case OP_ADD:
-                inst.rd
-        }
+    void executeInstruction(const Instruction& inst) {
+    switch(inst.opcode) {
+        // =====================
+        // R-TYPE
+        // =====================
+        case OP_ADD:
+            registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2];
+            break;
+        case OP_SUB:
+            registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2];
+            break;
+        case OP_AND:
+            registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2];
+            break;
+        case OP_OR:
+            registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2];
+            break;
+        case OP_XOR:
+            registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2];
+            break;
+
+        // =====================
+        // I-TYPE
+        // =====================
+        case OP_ADDI:
+            registers[inst.rd] = registers[inst.rs1] + inst.imm;
+            break;
+        case OP_SUBI:
+            registers[inst.rd] = registers[inst.rs1] - inst.imm;
+            break;
+        case OP_ANDI:
+            registers[inst.rd] = registers[inst.rs1] & inst.imm;
+            break;
+        case OP_ORI:
+            registers[inst.rd] = registers[inst.rs1] | inst.imm;
+            break;
+        case OP_XORI:
+            registers[inst.rd] = registers[inst.rs1] ^ inst.imm;
+            break;
+        case OP_LOAD:
+            registers[inst.rd] = readMemory(inst.addr);
+            break;
+
+        // =====================
+        // M-TYPE
+        // =====================
+        case OP_STORE:
+            writeMemory(inst.addr, registers[inst.rd]);
+            break;
+
+        // =====================
+        // J-TYPE
+        // =====================
+        case OP_JMP:
+            pc = inst.addr;
+            break;
+        case OP_CALL:
+            pushStack(pc);
+            pc = inst.addr;
+            break;
+        case OP_RET:
+            pc = popStack();
+            break;
+        case OP_HALT:
+            halted = true;
+            break;
+
+        default:
+            throw std::runtime_error("Unknown opcode in executeInstruction");
     }
+}
+
 
     void run() {
         while (!halted) {
@@ -213,11 +281,11 @@ uint32_t getOpcode(uint32_t instructionCode) {
     return opcode;
 }
 
-RTypeInstruction decodeRTypeInstruction(uint32_t instructionCode) {
+Instruction decodeRTypeInstruction(uint32_t instructionCode) {
     // R type instruction: Opcode(6) RD(4) RS1(4) RS2(4) Unused(14)
     uint32_t opcodeBitmask = 0x3F; // 0b00111111
     uint32_t bitmask = 0x0F; // 0b00001111
-    RTypeInstruction instruction;
+    Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & opcodeBitmask;
     instruction.rd = (instructionCode >> 22) & bitmask;
     instruction.rs1 = (instructionCode >> 18) & bitmask;
@@ -225,32 +293,32 @@ RTypeInstruction decodeRTypeInstruction(uint32_t instructionCode) {
     return instruction;
 }
 
-ITypeInstruction decodeITypeInstruction(uint32_t instructionCode) {
+Instruction decodeITypeInstruction(uint32_t instructionCode) {
     // Opcode(6) RD(4) RS(4) IMM(16) Unused(2)
-    ITypeInstruction instruction;
+    Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
-    instruction.rs = (instructionCode >> 18) & 0x0F; // 0b00001111
+    instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
     instruction.imm = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
 
     return instruction;
 }
 
-JTypeInstruction decodeJTypeInstruction(uint32_t instructionCode) {
+Instruction decodeJTypeInstruction(uint32_t instructionCode) {
     // Opcode(6) Address(16) Unused(10)
-    JTypeInstruction instruction;
+    Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.adr = (instructionCode >> 10) & 0xFFFF; // 0b1111111111111111
 
     return instruction;
 }
 
-MTypeInstruction decodeMTypeInstruction(uint32_t instructionCode) {
+Instruction decodeMTypeInstruction(uint32_t instructionCode) {
     // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
-    MTypeInstruction instruction;
+    Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
-    instruction.rs = (instructionCode >> 18) & 0x0F; // 0b00001111
+    instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
     instruction.offset = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
 
     return instruction;

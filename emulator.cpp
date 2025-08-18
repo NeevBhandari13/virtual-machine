@@ -34,45 +34,56 @@ enum Opcode : uint8_t {
     OP_MULI = 0x0C, // I-type
     OP_ANDI = 0x0D, // I-type
     OP_ORI  = 0x0E, // I-type
+    OP_XORI = 0x0F, // I-type 
 
     // Memory Operations (M-type: opcode, rd/rs, address)
-    OP_LD   = 0x0F, // M-type
-    OP_ST   = 0x10, // M-type
+    OP_LD   = 0x10, // M-type
+    OP_ST   = 0x11, // M-type
 
     // Control Flow
-    OP_JMP  = 0x11, // J-type: opcode, address
-    OP_BEQ  = 0x12, // B-type: opcode, rs1, rs2, offset
-    OP_BNE  = 0x13, // B-type: opcode, rs1, rs2, offset
-    OP_CALL = 0x14, // J-type: opcode, address
-    OP_RET  = 0x15, // R-type (no operands, uses stack/PC)
-    OP_HLT  = 0x16  // R-type (no operands)
+    OP_JMP  = 0x12, // J-type: opcode, address
+    OP_BEQ  = 0x13, // B-type: opcode, rs1, rs2, offset
+    OP_BNE  = 0x14, // B-type: opcode, rs1, rs2, offset
+    OP_CALL = 0x15, // J-type: opcode, address
+    OP_RET  = 0x16, // R-type (no operands, uses stack/PC)
+    OP_HLT  = 0x17  // R-type (no operands)
 };
+
 
 std::unordered_map<uint8_t, InstructionType> opcodeType = {
-    // R-type instructions
+    // R-type
     {0x00, InstructionType::R}, // ADD
     {0x01, InstructionType::R}, // SUB
-    {0x02, InstructionType::R}, // AND
-    {0x03, InstructionType::R}, // OR
-    {0x04, InstructionType::R}, // XOR
+    {0x02, InstructionType::R}, // MUL
+    {0x03, InstructionType::R}, // DIV
+    {0x04, InstructionType::R}, // MOD
+    {0x05, InstructionType::R}, // AND
+    {0x06, InstructionType::R}, // OR
+    {0x07, InstructionType::R}, // XOR
+    {0x08, InstructionType::R}, // SHL
+    {0x09, InstructionType::R}, // SHR
 
-    // I-type instructions
-    {0x10, InstructionType::I}, // ADDI
-    {0x11, InstructionType::I}, // SUBI
-    {0x12, InstructionType::I}, // ANDI
-    {0x13, InstructionType::I}, // ORI
-    {0x14, InstructionType::I}, // XORI
-    {0x15, InstructionType::I}, // LOAD
+    // I-type
+    {0x0A, InstructionType::I}, // ADDI
+    {0x0B, InstructionType::I}, // SUBI
+    {0x0C, InstructionType::I}, // MULI
+    {0x0D, InstructionType::I}, // ANDI
+    {0x0E, InstructionType::I}, // ORI
+    {0x0F, InstructionType::I}, // XORI
 
-    // M-type instructions
-    {0x20, InstructionType::M}, // STORE
+    // M-type
+    {0x10, InstructionType::M}, // LD
+    {0x11, InstructionType::M}, // ST
 
-    // J-type instructions
-    {0x30, InstructionType::J}, // JMP
-    {0x31, InstructionType::J}, // CALL
-    {0x32, InstructionType::J}, // RET
-    {0x33, InstructionType::J}, // HALT
+    // J-type
+    {0x12, InstructionType::J}, // JMP
+    {0x13, InstructionType::J}, // BEQ
+    {0x14, InstructionType::J}, // BNE
+    {0x15, InstructionType::J}, // CALL
+    {0x16, InstructionType::J}, // RET
+    {0x17, InstructionType::J}  // HLT
 };
+
 
 // single instruction class with all fields
 class Instruction {
@@ -119,150 +130,193 @@ class Instruction {
 class VM {
     uint32_t registers[8]; // registers
     uint32_t pc = 0; // program counter
-    // stack pointer, starts at 0xFFFC 
-    //since it is the last address divisible by 4
+    // stack pointer, starts at 0xFFFC since we cant start at 0x10000, if we start at 0xFFFF, it will stay empty and words will be misaligned
+    // sp points to current top of stack
     uint32_t sp = 0xFFFC; 
     bool halted = false;
+    
+    public: 
+        // 64 KiB of memory
+        std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
 
-    // 64 KiB of memory
-    std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
+        // vm function to load program into memory
+        bool loadProgram(std::string& filename) {
+            // Reset the VM state
+            std::fill(std::begin(registers), std::end(registers), 0);
+            pc = 0;
+            sp = 0xFFFC;
 
-    // vm function to load program into memory
-    bool loadProgram(std::string& filename) {
-        // Reset the VM state
-        std::fill(std::begin(registers), std::end(registers), 0);
-        pc = 0;
-        sp: 0xFFFC;
+            // clear ram
+            std::fill(memory.begin(), memory.end(), 0);
+            
+            // read in the file
+            // opens program file, reads in binary format to prevent any changes to file
+            std::ifstream programFile(filename, std::ios::binary);
 
-        // clear ram
-        std::fill(memory.begin(), memory.end(), 0);
-        
-        // read in the file
-        // opens program file, reads in binary format to prevent any changes to file
-        std::ifstream programFile(filename, std::ios::binary);
-
-        if (!programFile) {
-            throw std::runtime_error("Failed to open program file");
-        }
-        
-        // range constructor to create buffer, takes in iterators first and last and creates a vector from [first, last)
-        // std::istreambuf_iterator<char>(programFile) is an iterator pointing to the start of the programFile
-        // std::istreambuf_iterator<char>() is the default-constructed iterator, which represents the end-of-stream marker
-        std::vector<char> buffer(
-            (std::istreambuf_iterator<char>(programFile)),
-            std::istreambuf_iterator<char>()
-        );
-
-        if (buffer.size() > memory.size()) {
-            throw std::runtime_error("Program is too large to fit in VM memory");
-        }
-        
-        // copy from char buffer to memory
-        // copy reinterprets each byte from char to uint_8 since both are 1-byte
-        std::copy(buffer.begin(), buffer.end(), memory.begin());
-
-    }
-
-    uint32_t fetchInstruction() {
-        uint32_t instruction =
-        (uint32_t(memory[pc+3]) << 24) |
-        (uint32_t(memory[pc+2]) << 16) |
-        (uint32_t(memory[pc+1]) << 8)  |
-        uint32_t(memory[pc]);
-    }
-
-    Instruction decodeInstruction(uint32_t instCode) {
-        uint8_t opcode = getOpcode(instCode);
-
-        InstructionType type = opcodeType[opcode]; // look up the type
-
-        switch (type) {
-            case InstructionType::R:
-                return decodeRTypeInstruction(instCode);
-            case InstructionType::I:
-                return decodeITypeInstruction(instCode);
-            case InstructionType::M:
-                return decodeMTypeInstruction(instCode);
-            case InstructionType::J:
-                return decodeJTypeInstruction(instCode);
+            if (!programFile) {
+                throw std::runtime_error("Failed to open program file");
             }
-        throw std::runtime_error("Unknown instruction type");
-    }
+            
+            // range constructor to create buffer, takes in iterators first and last and creates a vector from [first, last)
+            // std::istreambuf_iterator<char>(programFile) is an iterator pointing to the start of the programFile
+            // std::istreambuf_iterator<char>() is the default-constructed iterator, which represents the end-of-stream marker
+            std::vector<char> buffer(
+                (std::istreambuf_iterator<char>(programFile)),
+                std::istreambuf_iterator<char>()
+            );
 
-    void executeInstruction(const Instruction& inst) {
-    switch(inst.opcode) {
-        // =====================
-        // R-TYPE
-        // =====================
-        case OP_ADD:
-            registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2];
-            break;
-        case OP_SUB:
-            registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2];
-            break;
-        case OP_AND:
-            registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2];
-            break;
-        case OP_OR:
-            registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2];
-            break;
-        case OP_XOR:
-            registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2];
-            break;
+            if (buffer.size() > memory.size()) {
+                throw std::runtime_error("Program is too large to fit in VM memory");
+            }
+            
+            // copy from char buffer to memory
+            // copy reinterprets each byte from char to uint_8 since both are 1-byte
+            std::copy(buffer.begin(), buffer.end(), memory.begin());
 
-        // =====================
-        // I-TYPE
-        // =====================
-        case OP_ADDI:
-            registers[inst.rd] = registers[inst.rs1] + inst.imm;
-            break;
-        case OP_SUBI:
-            registers[inst.rd] = registers[inst.rs1] - inst.imm;
-            break;
-        case OP_ANDI:
-            registers[inst.rd] = registers[inst.rs1] & inst.imm;
-            break;
-        case OP_ORI:
-            registers[inst.rd] = registers[inst.rs1] | inst.imm;
-            break;
-        case OP_XORI:
-            registers[inst.rd] = registers[inst.rs1] ^ inst.imm;
-            break;
-        case OP_LOAD:
-            registers[inst.rd] = readMemory(inst.addr);
-            break;
+        }
+            
+        uint32_t readMemory(uint32_t addr) {
+            if (addr + 3 >= memory.size()) {
+                throw std::out_of_range("Memory read out of bounds");
+            }
 
-        // =====================
-        // M-TYPE
-        // =====================
-        case OP_STORE:
-            writeMemory(inst.addr, registers[inst.rd]);
-            break;
+            // Little-endian load: lowest byte first
+            return  (uint32_t(memory[addr+3]) << 24) |
+            (uint32_t(memory[addr+2]) << 16) |
+            (uint32_t(memory[addr+1]) << 8)  |
+            uint32_t(memory[addr]);
+        }
 
-        // =====================
-        // J-TYPE
-        // =====================
-        case OP_JMP:
-            pc = inst.addr;
-            break;
-        case OP_CALL:
-            pushStack(pc);
-            pc = inst.addr;
-            break;
-        case OP_RET:
-            pc = popStack();
-            break;
-        case OP_HALT:
-            halted = true;
-            break;
+        void writeMemory(uint32_t addr, uint32_t value) {
+            if (addr + 3 >= memory.size()) {
+                throw std::out_of_range("Memory write out of bounds");
+            }
 
-        default:
-            throw std::runtime_error("Unknown opcode in executeInstruction");
-    }
+            // Little-endian store: lowest byte first
+            memory[addr + 3] = (value >> 24) & 0xFF;
+            memory[addr + 2] = (value >> 16) & 0xFF;
+            memory[addr + 1] = (value >> 8) & 0xFF;
+            memory[addr]     = value & 0xFF;
+        }
+
+        void pushStack(uint32_t value) {
+        // stack goes from high addresses to low
+        if (sp < 4) {
+            throw std::overflow_error("Stack overflow");
+        }
+
+        sp -= 4;  // move stack pointer down
+        writeMemory(sp, value);
+        }   
+
+        uint32_t popStack() {
+        if (sp + 4 > memory.size()) {
+            throw std::underflow_error("Stack underflow");
+        }
+
+        uint32_t value = readMemory(sp);
+        sp += 4;  // move stack pointer up
+        return value;
+        }
+
+        uint32_t fetchInstruction() {
+            uint32_t instruction = readMemory(pc);
+            return instruction;
+        }
+
+        Instruction decodeInstruction(uint32_t instCode) {
+            uint8_t opcode = getOpcode(instCode);
+
+            InstructionType type = opcodeType[opcode]; // look up the type
+
+            switch (type) {
+                case InstructionType::R:
+                    return decodeRTypeInstruction(instCode);
+                case InstructionType::I:
+                    return decodeITypeInstruction(instCode);
+                case InstructionType::M:
+                    return decodeMTypeInstruction(instCode);
+                case InstructionType::J:
+                    return decodeJTypeInstruction(instCode);
+                }
+            throw std::runtime_error("Unknown instruction type");
+        }
+
+        void executeInstruction(const Instruction& inst) {
+        switch(inst.opcode) {
+            // =====================
+            // R-TYPE
+            // =====================
+            case OP_ADD:
+                registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2];
+                break;
+            case OP_SUB:
+                registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2];
+                break;
+            case OP_AND:
+                registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2];
+                break;
+            case OP_OR:
+                registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2];
+                break;
+            case OP_XOR:
+                registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2];
+                break;
+
+            // =====================
+            // I-TYPE
+            // =====================
+            case OP_ADDI:
+                registers[inst.rd] = registers[inst.rs1] + inst.imm;
+                break;
+            case OP_SUBI:
+                registers[inst.rd] = registers[inst.rs1] - inst.imm;
+                break;
+            case OP_ANDI:
+                registers[inst.rd] = registers[inst.rs1] & inst.imm;
+                break;
+            case OP_ORI:
+                registers[inst.rd] = registers[inst.rs1] | inst.imm;
+                break;
+            case OP_XORI:
+                registers[inst.rd] = registers[inst.rs1] ^ inst.imm;
+                break;
+
+            // =====================
+            // M-TYPE
+            // =====================
+            case OP_LD:
+                registers[inst.rs1] = readMemory(inst.addr);
+                break;
+            case OP_ST:
+                writeMemory(inst.addr, registers[inst.rs1]);
+                break;
+
+            // =====================
+            // J-TYPE
+            // =====================
+            case OP_JMP:
+                pc = inst.addr;
+                break;
+            case OP_CALL:
+                pushStack(pc);
+                pc = inst.addr;
+                break;
+            case OP_RET:
+                pc = popStack();
+                break;
+            case OP_HLT:
+                halted = true;
+                break;
+
+            default:
+                throw std::runtime_error("Unknown opcode in executeInstruction");
+        }
 }
 
 
-    void run() {
+    void run(std::string& fileName) {
+        loadProgram(fileName);
         while (!halted) {
             uint32_t instCode = fetchInstruction();
             pc += 4; // increment program counter
@@ -308,7 +362,7 @@ Instruction decodeJTypeInstruction(uint32_t instructionCode) {
     // Opcode(6) Address(16) Unused(10)
     Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
-    instruction.adr = (instructionCode >> 10) & 0xFFFF; // 0b1111111111111111
+    instruction.addr = (instructionCode >> 10) & 0xFFFF; // 0b1111111111111111
 
     return instruction;
 }

@@ -2,8 +2,16 @@
 #include <vector>
 #include <stdio.h>
 #include <fstream>
+#include <unordered_map>
 
 
+// enum for different instructionTypes
+enum class InstructionType {
+    R,
+    I,
+    J,
+    M
+};
 
 enum Opcode : uint8_t {
     // Arithmetic (R-type: opcode, rd, rs1, rs2)
@@ -38,6 +46,32 @@ enum Opcode : uint8_t {
     OP_CALL = 0x14, // J-type: opcode, address
     OP_RET  = 0x15, // R-type (no operands, uses stack/PC)
     OP_HLT  = 0x16  // R-type (no operands)
+};
+
+std::unordered_map<uint8_t, InstructionType> opcodeType = {
+    // R-type instructions
+    {0x00, InstructionType::R}, // ADD
+    {0x01, InstructionType::R}, // SUB
+    {0x02, InstructionType::R}, // AND
+    {0x03, InstructionType::R}, // OR
+    {0x04, InstructionType::R}, // XOR
+
+    // I-type instructions
+    {0x10, InstructionType::I}, // ADDI
+    {0x11, InstructionType::I}, // SUBI
+    {0x12, InstructionType::I}, // ANDI
+    {0x13, InstructionType::I}, // ORI
+    {0x14, InstructionType::I}, // XORI
+    {0x15, InstructionType::I}, // LOAD
+
+    // M-type instructions
+    {0x20, InstructionType::M}, // STORE
+
+    // J-type instructions
+    {0x30, InstructionType::J}, // JMP
+    {0x31, InstructionType::J}, // CALL
+    {0x32, InstructionType::J}, // RET
+    {0x33, InstructionType::J}, // HALT
 };
 
 class Instruction {
@@ -86,6 +120,7 @@ class VM {
     // stack pointer, starts at 0xFFFC 
     //since it is the last address divisible by 4
     uint32_t sp = 0xFFFC; 
+    bool halted = false;
 
     // 64 KiB of memory
     std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
@@ -125,6 +160,50 @@ class VM {
         std::copy(buffer.begin(), buffer.end(), memory.begin());
 
     }
+
+    uint32_t fetchInstruction() {
+        uint32_t instruction =
+        (uint32_t(memory[pc+3]) << 24) |
+        (uint32_t(memory[pc+2]) << 16) |
+        (uint32_t(memory[pc+1]) << 8)  |
+        uint32_t(memory[pc]);
+    }
+
+    Instruction decodeInstruction(uint32_t instCode) {
+        uint8_t opcode = getOpcode(instCode);
+
+        InstructionType type = opcodeType[opcode]; // look up the type
+
+        switch (type) {
+            case InstructionType::R:
+                return decodeRTypeInstruction(instCode);
+            case InstructionType::I:
+                return decodeITypeInstruction(instCode);
+            case InstructionType::M:
+                return decodeMTypeInstruction(instCode);
+            case InstructionType::J:
+                return decodeJTypeInstruction(instCode);
+            }
+        throw std::runtime_error("Unknown instruction type");
+    }
+
+    void executeInstruction(Instruction inst) {
+        switch (inst.opcode) {
+            case OP_ADD:
+                inst.rd
+        }
+    }
+
+    void run() {
+        while (!halted) {
+            uint32_t instCode = fetchInstruction();
+            pc += 4; // increment program counter
+            Instruction inst = decodeInstruction(instCode);
+            executeInstruction(inst);
+        }
+    }
+
+
 
 };
 

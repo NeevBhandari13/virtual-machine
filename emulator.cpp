@@ -94,10 +94,9 @@ class Instruction {
 
 
 uint32_t getOpcode(uint32_t instructionCode) {
-    std::cout << instructionCode << std::endl;
     uint32_t bitMask = 0b00111111;
     uint8_t opcode = (instructionCode >> 26) & bitMask;
-    std::cout << opcode;
+    std::cout << "instruction code shifted: " << (instructionCode >> 26) << " and masked: " << ((instructionCode >> 26) & bitMask) << std::endl;
     return opcode;
 }
 
@@ -196,11 +195,11 @@ class VM {
             if (addr + 3 >= memory.size()) {
                 throw std::out_of_range("Memory read out of bounds");
             }
-            std::cout 
-                << int(memory[addr+3]) << " "
-                << int(memory[addr+2]) << " "
-                << int(memory[addr+1]) << " "
-                << int(memory[addr]) << std::endl;
+            // std::cout 
+            //     << int(memory[addr+3]) << " "
+            //     << int(memory[addr+2]) << " "
+            //     << int(memory[addr+1]) << " "
+            //     << int(memory[addr]) << std::endl;
 
             // Little-endian load: lowest byte first
             uint32_t word = (uint32_t(memory[addr+3]) << 24) |
@@ -241,6 +240,11 @@ class VM {
             uint32_t value = readMemory(sp);
             sp += 4;  // move stack pointer up
             return value;
+        }
+
+        // used to check if we do not need to increment pc
+        bool isJType(uint8_t opcode) {
+            return opcodeType[opcode] == InstructionType::J;
         }
 
         uint32_t fetchInstruction() {
@@ -344,15 +348,16 @@ class VM {
         std::cout << "test1" << std::endl;
         while (!halted && pc < 32) {
             uint32_t instCode = fetchInstruction();
-            pc += 4; // increment program counter
             Instruction inst = decodeInstruction(instCode);
             executeInstruction(inst);
+            // don't update pc if we have halted or just jumped
+            if (!halted && !isJType(inst.opcode)) {
+                pc += 4; // increment program counter
+            }
+            
         }
         std::cout << "test2" << std::endl;
     }
-
-
-
 };
 
 int main(int argc, char* argv[]) {

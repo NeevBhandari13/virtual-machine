@@ -145,15 +145,18 @@ Instruction decodeMTypeInstruction(uint32_t instructionCode) {
 
 class VM {
     uint32_t registers[8]; // registers
+    // 
     uint32_t pc = 0; // program counter
     // stack pointer, starts at 0xFFFC since we cant start at 0x10000, if we start at 0xFFFF, it will stay empty and words will be misaligned
-    // sp points to current top of stack
-    uint32_t sp = 0xFFFC; 
+    uint32_t sp = 0xFFF0; // sp points to current top of stack
+
+    uint32_t consoleOutAddress = 0xFFFC; // memory address to write out to console
     bool halted = false;
+    // 64 KiB of memory
+    std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
     
     public: 
-        // 64 KiB of memory
-        std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
+
 
         // vm function to load program into memory
         void loadProgram(std::string& filename) {
@@ -211,6 +214,10 @@ class VM {
         }
 
         void writeMemory(uint32_t addr, uint32_t value) {
+            if (addr == consoleOutAddress) {
+                std::cout << (value & 0xFF); // only print one byte
+            }
+
             if (addr + 3 >= memory.size()) {
                 throw std::out_of_range("Memory write out of bounds");
             }

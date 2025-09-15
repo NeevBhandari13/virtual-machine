@@ -39,6 +39,8 @@ enum Opcode : uint8_t {
     // Memory Operations (M-type: opcode, rd/rs, address)
     OP_LD   = 0x10, // M-type
     OP_ST   = 0x11, // M-type
+    OP_MOV  = 0x18, // R-type
+    OP_MOVI = 0x19, // I-type (only rd and imm)
 
     // Control Flow
     OP_JMP  = 0x12, // J-type: opcode, address
@@ -62,6 +64,7 @@ std::unordered_map<uint8_t, InstructionType> opcodeType = {
     {0x07, InstructionType::R}, // XOR
     {0x08, InstructionType::R}, // SHL
     {0x09, InstructionType::R}, // SHR
+    {0x18, InstructionType::R}, // MOV
 
     // I-type
     {0x0A, InstructionType::I}, // ADDI
@@ -70,6 +73,7 @@ std::unordered_map<uint8_t, InstructionType> opcodeType = {
     {0x0D, InstructionType::I}, // ANDI
     {0x0E, InstructionType::I}, // ORI
     {0x0F, InstructionType::I}, // XORI
+    {0x19, InstructionType::I}, // MOVI
 
     // M-type
     {0x10, InstructionType::M}, // LD
@@ -157,7 +161,6 @@ class VM {
     
     public: 
 
-
         // vm function to load program into memory
         void loadProgram(std::string& filename) {
             // Reset the VM state
@@ -214,6 +217,7 @@ class VM {
         }
 
         void writeMemory(uint32_t addr, uint32_t value) {
+            std::cout << addr << '\n';
             if (addr == consoleOutAddress) {
                 std::cout << (value & 0xFF); // only print one byte
             }
@@ -345,7 +349,7 @@ class VM {
                 break;
 
             default:
-                throw std::runtime_error("Unknown opcode in executeInstruction");
+                throw std::runtime_error("Unknown opcode: " + std::to_string(inst.opcode));
         }
 }
 

@@ -20,6 +20,7 @@ enum Opcode : uint8_t {
     OP_MUL  = 0x02, // R-type
     OP_DIV  = 0x03, // R-type
     OP_MOD  = 0x04, // R-type
+    OP_MOV  = 0x18, // R-type
 
     // Binary Logic (R-type)
     OP_AND  = 0x05, // R-type
@@ -35,13 +36,12 @@ enum Opcode : uint8_t {
     OP_ANDI = 0x0D, // I-type
     OP_ORI  = 0x0E, // I-type
     OP_XORI = 0x0F, // I-type 
+    OP_MOVI = 0x19, // I-type (only rd and imm)
 
     // Memory Operations (M-type: opcode, rd/rs, address)
     OP_LD   = 0x10, // M-type
     OP_ST   = 0x11, // M-type
-    OP_MOV  = 0x18, // R-type
-    OP_MOVI = 0x19, // I-type (only rd and imm)
-
+    
     // Control Flow
     OP_JMP  = 0x12, // J-type: opcode, address
     OP_BEQ  = 0x13, // B-type: opcode, rs1, rs2, offset
@@ -137,12 +137,12 @@ Instruction decodeJTypeInstruction(uint32_t instructionCode) {
 }
 
 Instruction decodeMTypeInstruction(uint32_t instructionCode) {
-    // Opcode(6) RD(4) RS(4) OFFSET(16) Unused(2) 
+    // Opcode(6) RD(4) RS(4) addr(16) Unused(2) 
     Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
     instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
-    instruction.offset = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
+    instruction.addr = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
 
     return instruction;
 }
@@ -347,6 +347,11 @@ class VM {
             case OP_HLT:
                 halted = true;
                 break;
+
+            case OP_MOV:
+                registers[inst.rd] = registers[inst.rs1];
+            case OP_MOVI:
+                registers[inst.rd] = inst.imm;
 
             default:
                 throw std::runtime_error("Unknown opcode: " + std::to_string(inst.opcode));

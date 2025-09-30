@@ -10,6 +10,7 @@ enum class InstructionType {
     R,
     I,
     J,
+    B,
     M
 };
 
@@ -81,11 +82,13 @@ std::unordered_map<uint8_t, InstructionType> opcodeType = {
 
     // J-type
     {0x12, InstructionType::J}, // JMP
-    {0x13, InstructionType::J}, // BEQ
-    {0x14, InstructionType::J}, // BNE
     {0x15, InstructionType::J}, // CALL
     {0x16, InstructionType::J}, // RET
-    {0x17, InstructionType::J}  // HLT
+    {0x17, InstructionType::J},  // HLT
+
+    // B-Type
+    {0x13, InstructionType::I}, // BEQ
+    {0x14, InstructionType::I}, // BNE
 };
 
 
@@ -132,6 +135,17 @@ Instruction decodeJTypeInstruction(uint32_t instructionCode) {
     Instruction instruction;
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.addr = (instructionCode >> 10) & 0xFFFF; // 0b1111111111111111
+
+    return instruction;
+}
+
+Instruction decodeBTypeInstruction(uint32_t instructionCode) {
+    // Opcode(6) RS1(4) RS2(4) OFFSET(16) UNUSED(2)
+    Instruction instruction;
+    instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
+    instruction.rs1 = (instructionCode >> 22) & 0x0F; // 0b00001111
+    instruction.rs2 = (instructionCode >> 18) & 0x0F; // 0b00001111
+    instruction.offset = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
 
     return instruction;
 }
@@ -257,6 +271,9 @@ class VM {
         bool isJType(uint8_t opcode) {
             return opcodeType[opcode] == InstructionType::J;
         }
+        bool isBType(uint8_t opcode) {
+            return opcodeType[opcode] == InstructionType::B;
+        }
 
         uint32_t fetchInstruction() {
             uint32_t instruction = readMemory(pc);
@@ -292,6 +309,15 @@ class VM {
             case OP_SUB:
                 registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2];
                 break;
+            case OP_MUL:
+                registers[inst.rd] = registers[inst.rs1] * registers[inst.rs2];
+                break;
+            case OP_DIV:
+                registers[inst.rd] = registers[inst.rs1] / registers[inst.rs2];
+                break;
+            case OP_MOD:
+                registers[inst.rd] = registers[inst.rs1] % registers[inst.rs2];
+                break;
             case OP_AND:
                 registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2];
                 break;
@@ -300,6 +326,12 @@ class VM {
                 break;
             case OP_XOR:
                 registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2];
+                break;
+            case OP_SHL:
+                registers[inst.rd] = registers[inst.rs1] << registers[inst.rs2];
+                break;
+            case OP_SHR:
+                registers[inst.rd] = registers[inst.rs1] >> registers[inst.rs2];
                 break;
 
             // =====================
@@ -348,6 +380,11 @@ class VM {
                 halted = true;
                 break;
 
+            case OP_BEQ:
+                if (registers[inst.rs1] == registers[inst.rs2]) {
+                    pc = pc + inst.offset;
+                }
+
             case OP_MOV:
                 registers[inst.rd] = registers[inst.rs1];
             case OP_MOVI:
@@ -367,7 +404,7 @@ class VM {
             Instruction inst = decodeInstruction(instCode);
             executeInstruction(inst);
             // don't update pc if we have halted or just jumped
-            if (!halted && !isJType(inst.opcode)) {
+            if (!halted && !isJType(inst.opcode) && !isBType(inst.opcode)) {
                 pc += 4; // increment program counter
             }
             

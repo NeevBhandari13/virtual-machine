@@ -4,6 +4,7 @@
 #include <fstream>
 #include <unordered_map>
 
+#define DEBUG
 
 // enum for different instructionTypes
 enum class InstructionType {
@@ -87,8 +88,8 @@ std::unordered_map<uint8_t, InstructionType> opcodeType = {
     {0x17, InstructionType::J},  // HLT
 
     // B-Type
-    {0x13, InstructionType::I}, // BEQ
-    {0x14, InstructionType::I}, // BNE
+    {0x13, InstructionType::B}, // BEQ
+    {0x14, InstructionType::B}, // BNE
 };
 
 
@@ -96,7 +97,8 @@ std::unordered_map<uint8_t, InstructionType> opcodeType = {
 class Instruction {
     public:
         uint8_t opcode, rd, rs1, rs2;
-        uint16_t imm, addr, offset;
+        uint16_t addr;
+        int16_t imm, offset;
 };
 
 
@@ -125,7 +127,8 @@ Instruction decodeITypeInstruction(uint32_t instructionCode) {
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.rd = (instructionCode >> 22) & 0x0F; // 0b00001111
     instruction.rs1 = (instructionCode >> 18) & 0x0F; // 0b00001111
-    instruction.imm = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
+    // cast to int16_t to preserve sign information
+    instruction.imm = int16_t((instructionCode >> 2) & 0xFFFF); // 0b1111111111111111
 
     return instruction;
 }
@@ -145,7 +148,7 @@ Instruction decodeBTypeInstruction(uint32_t instructionCode) {
     instruction.opcode = (instructionCode >> 26) & 0x3F; // 0b00111111
     instruction.rs1 = (instructionCode >> 22) & 0x0F; // 0b00001111
     instruction.rs2 = (instructionCode >> 18) & 0x0F; // 0b00001111
-    instruction.offset = (instructionCode >> 2) & 0xFFFF; // 0b1111111111111111
+    instruction.offset = int16_t((instructionCode >> 2)) & 0xFFFF; // 0b1111111111111111
 
     return instruction;
 }
@@ -170,6 +173,7 @@ class VM {
 
     uint32_t consoleOutAddress = 0xFFFC; // memory address to write out to console
     bool halted = false;
+    bool pcMoved = false;
     // 64 KiB of memory
     std::vector<uint8_t> memory = std::vector<uint8_t>(64 * 1024); // one byte in each space
     
@@ -233,7 +237,7 @@ class VM {
         void writeMemory(uint32_t addr, uint32_t value) {
             std::cout << addr << '\n';
             if (addr == consoleOutAddress) {
-                std::cout << (value & 0xFF); // only print one byte
+                std::cout << static_cast<char>(value & 0xFF) << std::flush; // only print one byte
             }
 
             if (addr + 3 >= memory.size()) {
@@ -267,13 +271,58 @@ class VM {
             return value;
         }
 
-        // used to check if we do not need to increment pc
-        bool isJType(uint8_t opcode) {
-            return opcodeType[opcode] == InstructionType::J;
+        void printInstruction(const Instruction& inst, uint32_t pc) {
+            std::cout << "PC=0x" << std::hex << pc 
+                    << " Opcode=0x" << (int)inst.opcode 
+                    << " -> ";
+
+            switch (inst.opcode) {
+                // Arithmetic (R-type)
+                case OP_ADD:  std::cout << "ADD R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_SUB:  std::cout << "SUB R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_MUL:  std::cout << "MUL R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_DIV:  std::cout << "DIV R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_MOD:  std::cout << "MOD R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+
+                // Logic (R-type)
+                case OP_AND:  std::cout << "AND R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_OR:   std::cout << "OR  R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_XOR:  std::cout << "XOR R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_SHL:  std::cout << "SHL R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+                case OP_SHR:  std::cout << "SHR R" << inst.rd << ", R" << inst.rs1 << ", R" << inst.rs2; break;
+
+                // Immediate Arithmetic (I-type)
+                case OP_ADDI: std::cout << "ADDI R" << inst.rd << ", R" << inst.rs1 << ", " << (int16_t)inst.imm; break;
+                case OP_SUBI: std::cout << "SUBI R" << inst.rd << ", R" << inst.rs1 << ", " << (int16_t)inst.imm; break;
+                case OP_MULI: std::cout << "MULI R" << inst.rd << ", R" << inst.rs1 << ", " << (int16_t)inst.imm; break;
+                case OP_ANDI: std::cout << "ANDI R" << inst.rd << ", R" << inst.rs1 << ", " << (int16_t)inst.imm; break;
+                case OP_ORI:  std::cout << "ORI  R" << inst.rd << ", R" << inst.rs1 << ", " << (int16_t)inst.imm; break;
+                case OP_XORI: std::cout << "XORI R" << inst.rd << ", R" << inst.rs1 << ", " << (int16_t)inst.imm; break;
+
+                // Memory
+                case OP_LD: std::cout << "LD  R" << inst.rd << ", [0x" << std::hex << inst.addr << "]"; break;
+                case OP_ST: std::cout << "ST  [0x" << std::hex << inst.addr << "], R" << inst.rs1; break;
+
+                // Data movement
+                case OP_MOV:  std::cout << "MOV R" << inst.rd << ", R" << inst.rs1; break;
+                case OP_MOVI: std::cout << "MOVI R" << inst.rd << ", " << (int16_t)inst.imm; break;
+
+                // Control flow
+                case OP_JMP:  std::cout << "JMP 0x" << std::hex << inst.addr; break;
+                case OP_BEQ:  std::cout << "BEQ R" << inst.rs1 << ", R" << inst.rs2 << ", offset=" << (int16_t)inst.offset; break;
+                case OP_BNE:  std::cout << "BNE R" << inst.rs1 << ", R" << inst.rs2 << ", offset=" << (int16_t)inst.offset; break;
+                case OP_CALL: std::cout << "CALL 0x" << std::hex << inst.addr; break;
+                case OP_RET:  std::cout << "RET"; break;
+                case OP_HLT:  std::cout << "HLT"; break;
+
+                default:
+                    std::cout << "???"; 
+                    break;
+            }
+
+            std::cout << "\n";
         }
-        bool isBType(uint8_t opcode) {
-            return opcodeType[opcode] == InstructionType::B;
-        }
+
 
         uint32_t fetchInstruction() {
             uint32_t instruction = readMemory(pc);
@@ -368,13 +417,16 @@ class VM {
             // =====================
             case OP_JMP:
                 pc = inst.addr;
+                pcMoved = true;
                 break;
             case OP_CALL:
                 pushStack(pc);
                 pc = inst.addr;
+                pcMoved = true;
                 break;
             case OP_RET:
                 pc = popStack();
+                pcMoved = true;
                 break;
             case OP_HLT:
                 halted = true;
@@ -383,12 +435,22 @@ class VM {
             case OP_BEQ:
                 if (registers[inst.rs1] == registers[inst.rs2]) {
                     pc = pc + inst.offset;
+                    pcMoved = true;
                 }
+                break;
+            case OP_BNE:
+                if (registers[inst.rs1] != registers[inst.rs2]) {
+                    pc = pc + inst.offset;
+                    pcMoved = true;
+                }
+                break;
 
             case OP_MOV:
                 registers[inst.rd] = registers[inst.rs1];
+                break;
             case OP_MOVI:
                 registers[inst.rd] = inst.imm;
+                break;
 
             default:
                 throw std::runtime_error("Unknown opcode: " + std::to_string(inst.opcode));
@@ -398,18 +460,25 @@ class VM {
 
     void run(std::string& fileName) {
         loadProgram(fileName);
-        std::cout << "test1" << std::endl;
-        while (!halted && pc < 32) {
+        std::cout << "program loaded" << std::endl;
+        while (!halted) {
             uint32_t instCode = fetchInstruction();
             Instruction inst = decodeInstruction(instCode);
+            #ifdef DEBUG
+                printInstruction(inst, pc);
+            #endif
             executeInstruction(inst);
             // don't update pc if we have halted or just jumped
-            if (!halted && !isJType(inst.opcode) && !isBType(inst.opcode)) {
+            if (!halted && !pcMoved) {
                 pc += 4; // increment program counter
             }
+            pcMoved = false;
+            #ifdef DEBUG
+                std::cin.get();
+            #endif
             
         }
-        std::cout << "test2" << std::endl;
+        std::cout << "execution finished" << std::endl;
     }
 };
 
